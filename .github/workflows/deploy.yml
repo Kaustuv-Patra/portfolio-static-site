@@ -1,0 +1,40 @@
+name: Deploy static site to OCI (via PAR)
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Prepare dist folder
+        run: |
+          rm -rf dist
+          mkdir -p dist
+          cp index.html dist/ || true
+          cp styles.css dist/ || true
+          # copy assets if you have them
+          if [ -d assets ]; then cp -r assets dist/; fi
+
+      - name: Upload files to OCI via PAR
+        env:
+          PAR_UPLOAD_URL: ${{ secrets.OCI_PAR_UPLOAD_URL }}
+        run: |
+          set -euo pipefail
+
+          # Normalize PAR URL (remove trailing slash if present)
+          CLEAN_URL="${PAR_UPLOAD_URL%/}"
+
+          echo "Using PAR base URL: $CLEAN_URL"
+
+          cd dist
+          for f in $(find . -type f | sed 's#^\./##'); do
+            echo "Uploading $f ..."
+            curl --fail --show-error --silent -X PUT --data-binary @"$f" "$CLEAN_URL/$f"
+            echo "Uploaded $f"
+          done
